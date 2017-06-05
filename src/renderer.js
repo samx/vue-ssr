@@ -8,7 +8,7 @@ const NODE_ENV = process.env.NODE_ENV || 'production'
 const isDev = NODE_ENV === 'development'
 
 const createBundleRenderer = require('vue-server-renderer').createBundleRenderer
-const DEFAULT_RENDERER_OPTIONS  = {
+const DEFAULT_RENDERER_OPTIONS = {
     cache: require('lru-cache')({
         max: 1000,
         maxAge: 1000 * 60 * 15
@@ -29,12 +29,12 @@ const DEFAULT_HEAD_DATA = {
     keywords: ''
 }
 
-function getFileName (webpackServer, projectName) {
+function getFileName(webpackServer, projectName) {
     return webpackServer.output.filename.replace('[name]', projectName)
 }
 
 class VueSSR {
-    constructor ({ projectName, rendererOptions, webpackServer , AppHtml, contextHandler, defaultHeadData }) {
+    constructor({ projectName, rendererOptions, webpackServer, AppHtml, contextHandler, defaultHeadData }) {
         this.projectName = projectName
         this.rendererOptions = Object.assign({}, DEFAULT_RENDERER_OPTIONS, rendererOptions)
         this.webpackServerConfig = webpackServer
@@ -46,7 +46,7 @@ class VueSSR {
         this.initRenderer()
     }
 
-    headDataInject (context, html) {
+    headDataInject(context, html) {
         if (!context.headData) context.headData = {}
         let head
         head = html.replace('{{ _VueSSR_Title }}', (context.headData.title || this.defaultHeadData.title) + this.defaultHeadData.baseTitle)
@@ -55,11 +55,11 @@ class VueSSR {
         return head
     }
 
-    createRenderer (bundle) {
+    createRenderer(bundle) {
         return createBundleRenderer(bundle, this.rendererOptions)
     }
 
-    initRenderer () {
+    initRenderer() {
         if (this.renderer) {
             return this.renderer
         }
@@ -74,7 +74,7 @@ class VueSSR {
         }
     }
 
-    parseHTML (template) {
+    parseHTML(template) {
         const i = template.indexOf(this.AppHtml)
         this.HTML = {
             head: template.slice(0, i),
@@ -82,50 +82,49 @@ class VueSSR {
         }
     }
 
-    render (req, res, template) {
+    render(request, reply, template) {
         if (this.template !== template) {
             this.parseHTML(template)
         }
 
         if (!this.renderer) {
-            return res.end('waiting for compilation... refresh in a moment.')
+            return reply('waiting for compilation... refresh in a moment.')
         }
 
-        let context = { url: req.url}
+        let context = { url: request.url }
 
         if (this.contextHandler) {
-            context = this.contextHandler(req)
+            context = this.contextHandler(request)
         }
 
-        this.RenderToStream(context, res)
+        this.RenderToStream(context, reply)
     }
 
-    RenderToStream (context, res) {
+    RenderToStream(context, reply) {
         const renderStream = this.renderer.renderToStream(context)
         let firstChunk = true
-        
+        let html = '';
         renderStream.on('data', chunk => {
             if (firstChunk) {
-                res.write(this.headDataInject(context, this.HTML.head))
+                html = this.headDataInject(context, this.HTML.head);
                 if (context.initialState) {
-                    res.write(
-                        `<script>window.__INITIAL_STATE__=${
-                            serialize(context.initialState, { isJSON: true })
-                        }</script>`
-                    )
+                    html += `<script>window.__INITIAL_STATE__=${
+                        serialize(context.initialState, { isJSON: true })
+                        }</script>`;
+
                 }
                 firstChunk = false
             }
-            res.write(chunk)
+            html += chunk;
         })
 
         renderStream.on('end', () => {
-            res.end(this.HTML.tail)
+            reply(html + _this2.HTML.tail);
         })
 
         renderStream.on('error', err => {
             console.error(err)
-            res.end('<script>location.href="/"</script>')
+            reply('<script>location.href="/"</script>')
         })
     }
 }

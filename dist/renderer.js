@@ -105,49 +105,50 @@ var VueSSR = function () {
         }
     }, {
         key: 'render',
-        value: function render(req, res, template) {
+        value: function render(request, reply, template) {
             if (this.template !== template) {
                 this.parseHTML(template);
             }
 
             if (!this.renderer) {
-                return res.end('waiting for compilation... refresh in a moment.');
+                return reply('waiting for compilation... refresh in a moment.');
             }
 
-            var context = { url: req.url };
+            var context = { url: request.url };
 
             if (this.contextHandler) {
-                context = this.contextHandler(req);
+                context = this.contextHandler(request);
             }
 
-            this.RenderToStream(context, res);
+            this.RenderToStream(context, reply);
         }
     }, {
         key: 'RenderToStream',
-        value: function RenderToStream(context, res) {
+        value: function RenderToStream(context, reply) {
             var _this2 = this;
+            var html = '';
 
             var renderStream = this.renderer.renderToStream(context);
             var firstChunk = true;
 
             renderStream.on('data', function (chunk) {
                 if (firstChunk) {
-                    res.write(_this2.headDataInject(context, _this2.HTML.head));
+                    html = _this2.headDataInject(context, _this2.HTML.head);
+
                     if (context.initialState) {
-                        res.write('<script>window.__INITIAL_STATE__=' + serialize(context.initialState, { isJSON: true }) + '</script>');
+                        html += '<script>window.__INITIAL_STATE__=' + serialize(context.initialState, { isJSON: true }) + '</script>';
                     }
                     firstChunk = false;
                 }
-                res.write(chunk);
+                html += chunk;
             });
 
             renderStream.on('end', function () {
-                res.end(_this2.HTML.tail);
+                reply(html + _this2.HTML.tail);
             });
 
             renderStream.on('error', function (err) {
-                console.error(err);
-                res.end('<script>location.href="/"</script>');
+                reply('<script>location.href="/"</script>');
             });
         }
     }]);
